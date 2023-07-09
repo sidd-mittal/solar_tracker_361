@@ -17,26 +17,22 @@ void setup() {
   SerialBT.begin("CDB-Robichaud");   //Bluetooth device name CDBtest is the argument name, can be changed to anything unique
   Serial.println("The device sstarted, now you can pair it with bluetooth!");
 
-  stepper.setMaxSpeed(1000);
-  stepper.setSpeed(250);
+  stepper.setMaxSpeed(100);
   stepper.setAcceleration(20);
-
-  // 2048 steps for 360 degree rotation 
-  // stepper.moveTo(1024);
 }
 
 void loop() {
-
   if (Serial.available()) {
-    SerialBT.write(Serial.read()); 
     // SerialBT.write() sends data using bluetooth serial.
     // Serial.read() returns the data received in the serial port.
   }
+
   if (SerialBT.available()) {
     int input = SerialBT.readString().toInt();
-    double angle = input * 5.69;
-    Serial.println(angle);
-    stepper.moveTo(angle);
+    double steps = input * 5.69;
+    stepper.moveTo(steps);
   }
-  stepper.run();
+
+  stepper.setSpeed(100);
+  stepper.runSpeedToPosition();
 }
