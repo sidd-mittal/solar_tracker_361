@@ -1,3 +1,6 @@
+#include <AccelStepper.h>
+
+AccelStepper azimuthStepper(AccelStepper::FULL4WIRE, 25, 26, 33, 27);
 
 int sensorPin1 = A0; // select the input pin for LDR
 int sensorPin2 = A1;
@@ -6,6 +9,19 @@ int sensorValue2 = 0;
 
 void setup() {
   Serial.begin(9600); //sets serial port for communication
+  azimuthStepper.setMaxSpeed(100);
+  azimuthStepper.setAcceleration(20);
+  azimuthStepper.moveTo(500);
+}
+
+void rotateRight(int currPos, AccelStepper motor){
+  new_pos = curr_pos * 1.1
+  motor.moveTo(new_pos)
+}
+
+void rotateLeft(int currPos){
+  new_pos = curr_pos * -1.1
+  motor.moveTo(new_pos)
 }
 
 int calculatePanelAngle(int left_sensor, int right_sensor){
@@ -22,30 +38,24 @@ int calculatePanelAngle(int left_sensor, int right_sensor){
       while (sensor_difference > sensor_buffer){
 
         // move motor left some x amount ~ prolly a few degrees
+        rotateLeft(azimuthStepper.currentPosition(), azimuthStepper)
 
         right_sensor = analogRead(sensorPin1);
         left_sensor = analogRead(sensorPin2);
-        sensor_difference = abs(left_sensor - right_sensor)
+        sensor_difference = abs(left_sensor - right_sensor);
       }
-
-      new_panel_angle = 0
-      return new_panel_angle
     }
 
     else {
-      // Tilt panel right
-
       while (sensor_difference > sensor_buffer){
 
         // move motor right some x amount ~ prolly a few degrees
+        rotateRight(azimuthStepper.currentPosition(), azimuthStepper)
 
         right_sensor = analogRead(sensorPin1);
         left_sensor = analogRead(sensorPin2);
-        sensor_difference = abs(left_sensor - right_sensor)
+        sensor_difference = abs(left_sensor - right_sensor);
       }
-      
-      new_panel_angle = 0
-      return new_panel_angle
     }
   }
 }
