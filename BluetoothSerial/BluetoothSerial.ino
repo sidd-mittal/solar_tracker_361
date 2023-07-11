@@ -2,7 +2,8 @@
 #include <AccelStepper.h>
 
 // Define a stepper and the pins it will use
-AccelStepper stepper(AccelStepper::FULL4WIRE,19, 22, 23, 18); // Defaults to AccelStepper::FULL4WIRE (4 pins) on 2, 3, 4, 5
+AccelStepper betaStepper(AccelStepper::FULL4WIRE,19, 22, 23, 18); // Defaults to AccelStepper::FULL4WIRE (4 pins) on 2, 3, 4, 5
+AccelStepper azimuthStepper(AccelStepper::FULL4WIRE, 25, 26, 33, 27); 
 
 //checks if Bluetooth is properly enabled.
 #if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
@@ -17,8 +18,12 @@ void setup() {
   SerialBT.begin("CDB-Robichaud");   //Bluetooth device name CDBtest is the argument name, can be changed to anything unique
   Serial.println("The device sstarted, now you can pair it with bluetooth!");
 
-  stepper.setMaxSpeed(100);
-  stepper.setAcceleration(20);
+  betaStepper.setMaxSpeed(100);
+  betaStepper.setAcceleration(20);
+
+  azimuthStepper.setMaxSpeed(100);
+  azimuthStepper.setAcceleration(20);
+  azimuthStepper.moveTo(500);
 }
 
 void loop() {
@@ -30,9 +35,14 @@ void loop() {
   if (SerialBT.available()) {
     int input = SerialBT.readString().toInt();
     double steps = input * 5.69;
-    stepper.moveTo(steps);
+    betaStepper.moveTo(steps);
   }
 
-  stepper.setSpeed(100);
-  stepper.runSpeedToPosition();
+  betaStepper.setSpeed(100);
+  betaStepper.runSpeedToPosition();
+
+  if (azimuthStepper.distanceToGo() == 0)
+      azimuthStepper.moveTo(-azimuthStepper.currentPosition());
+
+    azimuthStepper.run();
 }
