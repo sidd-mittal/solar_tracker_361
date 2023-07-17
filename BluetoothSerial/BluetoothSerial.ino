@@ -1,26 +1,52 @@
 #include "BluetoothSerial.h"
 #include <AccelStepper.h>
+#include <Wire.h>
+#include <Adafruit_INA219.h>
 
+/******************
+  SETUP FOR MOTORS
+*******************/
 #define HALFSTEP 8
 
-// Define the steppers and the pins it will use
+// Initialize variables used for stepper motors
 AccelStepper azimuthStepper(HALFSTEP, 25, 26, 33, 27);
-AccelStepper betaStepper(HALFSTEP,19, 22, 23, 18);
-
-// Checks if Bluetooth is properly enabled.
-#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-#endif
-
-// Creates an instance of BluetoothSerial called SerialBT
-BluetoothSerial SerialBT;
-
-// Motor Variables 
+AccelStepper betaStepper(HALFSTEP,19, 4, 23, 18); 
+ 
 double azimuthSteps = NULL; 
 double betaSteps = NULL; 
 double incrementAngle = NULL;
 double incrementTime = NULL; 
 
+/*****************
+  SETUP FOR INA219
+******************/
+Adafruit_INA219 ina219;
+int base = 32; // Pin connected to base pin on the transistor (used for monitoring current)
+// Reporting frequency
+float freq = 1/2; // Hz
+// Delay after changing state of transistor
+int del = 2; 
+
+// Sensor variables 
+float current_mA = 0;
+float voltage = 0;
+float power_mW = 0;
+
+// Tracking time
+unsigned long last = 0;
+unsigned long led_last = 0;
+float t = 0;
+int led = 2000;
+bool state = false;
+
+/*********************
+  SETUP FOR BLUETOOTH
+**********************/
+BluetoothSerial SerialBT;
+
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
 
 bool cong = false; 
 
@@ -41,19 +67,30 @@ void BT_EventHandler(esp_spp_cb_event_t event, esp_spp_cb_param_t *param) {
 }
 
 void setup() {
-  Serial.begin(115200);         // Initialize a serial communication at a baud rate of 115200
+  Serial.begin(115200);    // Initialize a serial communication at a baud rate of 115200
+
   SerialBT.begin("SYDEGroup16");   // Bluetooth device name SYDEGroup16
   Serial.println("The device started, now you can pair it with bluetooth!");
+  SerialBT.register_callback(BT_EventHandler); // Register the callbacks defined above (most important: congestion)
 
   // Setup defaults for both steppers 
-  betaStepper.setMaxSpeed(100);
+  betaStepper.setMaxSpeed(50);
   betaStepper.setAcceleration(20);
 
-  azimuthStepper.setMaxSpeed(100);
+  azimuthStepper.setMaxSpeed(50);
   azimuthStepper.setAcceleration(20);
 
-   // Register the callbacks defined above (most important: congestion)
-  SerialBT.register_callback(BT_EventHandler);
+
+  //Setup for INA219
+  pinMode(base, OUTPUT);
+  pinMode(2, OUTPUT);
+  ina219.begin();
+  ina219.setCalibration_16V_400mA();
+
+  Serial.println("Measuring voltage and current with INA219 ...");
+
+  last = millis();
+  led_last = millis();
 }
 
 /* 
@@ -68,6 +105,10 @@ void setup() {
 */
 
 void loop() {
+
+  /************
+  Bluetooth
+  *************/
   // If our variables aren't populated, continue to read from the Bluetooth Serial connection
   if (SerialBT.available() && 
       (azimuthSteps == NULL || 
@@ -106,9 +147,9 @@ void loop() {
       Serial.println(" minutes");
     }
   }
-
+  
   // This is executed after we set the initial position
-  if (incrementAngle != NULL && incrementTime != NULL && azimuthStepper.distanceToGo() == 0){ 
+  if (incrementAngle != NULL && incrementTime != NULL){ 
     Serial.print("Starting sequence, will move motor by ");
     Serial.print(incrementAngle);
     Serial.print(" degrees in ");
@@ -118,15 +159,57 @@ void loop() {
     delay(incrementTimeMS);
     Serial.println("Moving motor");
     // Here we should check if the increment angle is within bounds 0 < x < 90 before incrementing
-    // Serial.println(azimuthStepper.currentPosition()/(5.69 * 2));
-    azimuthStepper.move(incrementAngle*5.69*2); //move relatively
-    azimuthStepper.setSpeed(100);
-    azimuthStepper.runSpeedToPosition();
+    azimuthStepper.move(incrementAngle); //move relatively
   }
-    // Set the speed and run the steppers (these should be called as often as possible)
-  azimuthStepper.setSpeed(100);
+
+  /************
+  Monitoring Current
+  *************/
+  if (millis() - last >= 60000 ){
+    last = millis();
+    t = last/1000.0; // Time in seconds
+
+
+    // MODIFY THIS TO OBTAIN Voc and Isc
+    // Change the voltage on the transistor BASE as needed using:
+
+    //HIGH = Short circut (Isc)
+    digitalWrite(base, HIGH);
+    delay(del);
+    current_mA = ina219.getCurrent_mA();
+    delay(del);
+
+    //LOW = Open circut (Voc)
+    digitalWrite(base, LOW);
+    delay(del);
+    voltage = ina219.getBusVoltage_V();
+
+
+
+    // Max power (mW) is at roughly 0.7x the voltage
+    power_mW = (0.7*voltage)*current_mA;
+
+
+    // Format: Time, Voltage, Current, Estimated Power
+    Serial.print(t); Serial.print(", "); 
+    Serial.print(voltage); Serial.print(", "); 
+    Serial.print(current_mA); Serial.print(", ");
+    Serial.println(power_mW);
+  }
+
+  // Blink the blue LED while we're acquiring data
+  if (millis() - led_last > led){
+    state = !state;
+    if (state){digitalWrite(2,HIGH);
+    }else{digitalWrite(2,LOW);
+    }
+    led_last = millis();
+  }
+  
+  // Set the speed and run the steppers (these should be called as often as possible)
+  azimuthStepper.setSpeed(50);
   azimuthStepper.runSpeedToPosition();
-  betaStepper.setSpeed(100);
+  betaStepper.setSpeed(50);
   betaStepper.runSpeedToPosition();
 
 }
