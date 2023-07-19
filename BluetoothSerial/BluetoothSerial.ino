@@ -74,9 +74,11 @@ void setup() {
   SerialBT.register_callback(BT_EventHandler); // Register the callbacks defined above (most important: congestion)
 
   // Setup defaults for both steppers 
+  //Start beta horizontal
   betaStepper.setMaxSpeed(50);
-  betaStepper.setAcceleration(20);
+  betaStepper.setAcceleration(100000);
 
+  //start oriented east 
   azimuthStepper.setMaxSpeed(50);
   azimuthStepper.setAcceleration(20);
 
@@ -123,22 +125,22 @@ void loop() {
     value.trim();
 
     if(id == String('A')){
-      azimuthSteps = value.toInt() * 5.69 * 2;
+      azimuthSteps = value.toFloat() * 5.69 * 2;
       azimuthStepper.moveTo(azimuthSteps);
       Serial.print("Azimuth angle set to: ");
-      Serial.print(value.toInt()); 
+      Serial.print(value.toFloat()); 
       Serial.println(" degrees");
     } else if (id == String('B')){ 
-      if(value.toInt() <= 90){ //Our Beta Stepper should not exceed 90 degrees or go below 0
-        betaSteps = value.toInt() * 5.69 * 2;
+      if(value.toFloat() <= 90){ //Our Beta Stepper should not exceed 90 degrees or go below 0
+        betaSteps = value.toFloat() * 5.69 * 2;
         betaStepper.moveTo(betaSteps);
         Serial.print("Beta angle set to: ");
-        Serial.print(value.toInt()); 
+        Serial.print(value.toFloat()); 
         Serial.println(" degrees");
       }
     } else if (id == String('I')) {
-      incrementAngle = value.substring(0,value.indexOf(',')).toInt();
-      incrementTime = value.substring(value.indexOf(',') + 1).toInt();
+      incrementAngle = value.substring(0,value.indexOf(',')).toFloat();
+      incrementTime = value.substring(value.indexOf(',') + 1).toFloat();
       Serial.print("Increment angle set to: ");
       Serial.print(incrementAngle); 
       Serial.println(" degrees");
@@ -149,7 +151,7 @@ void loop() {
   }
   
   // This is executed after we set the initial position
-  if (incrementAngle != NULL && incrementTime != NULL){ 
+  if (incrementAngle != NULL && incrementTime != NULL && azimuthStepper.distanceToGo() == 0){ 
     Serial.print("Starting sequence, will move motor by ");
     Serial.print(incrementAngle);
     Serial.print(" degrees in ");
@@ -159,8 +161,16 @@ void loop() {
     delay(incrementTimeMS);
     Serial.println("Moving motor");
     // Here we should check if the increment angle is within bounds 0 < x < 90 before incrementing
-    azimuthStepper.move(incrementAngle); //move relatively
+    azimuthStepper.move(incrementAngle*5.69*2); //move relatively
+    azimuthStepper.setSpeed(100);
+    azimuthStepper.runSpeedToPosition();
   }
+
+  // Set the speed and run the steppers (these should be called as often as possible)
+  azimuthStepper.setSpeed(100);
+  azimuthStepper.runSpeedToPosition();
+  betaStepper.setSpeed(50);
+  betaStepper.runSpeedToPosition();
 
   /************
   Monitoring Current
@@ -183,13 +193,10 @@ void loop() {
     digitalWrite(base, LOW);
     delay(del);
     voltage = ina219.getBusVoltage_V();
-
-
-
+    
     // Max power (mW) is at roughly 0.7x the voltage
     power_mW = (0.7*voltage)*current_mA;
-
-
+    
     // Format: Time, Voltage, Current, Estimated Power
     Serial.print(t); Serial.print(", "); 
     Serial.print(voltage); Serial.print(", "); 
@@ -205,11 +212,4 @@ void loop() {
     }
     led_last = millis();
   }
-  
-  // Set the speed and run the steppers (these should be called as often as possible)
-  azimuthStepper.setSpeed(50);
-  azimuthStepper.runSpeedToPosition();
-  betaStepper.setSpeed(50);
-  betaStepper.runSpeedToPosition();
-
 }
