@@ -33,7 +33,8 @@ float voltage = 0;
 float power_mW = 0;
 
 // Tracking time
-unsigned long last = 0;
+unsigned long last1 = 0;
+unsigned long last2 = 0;
 unsigned long led_last = 0;
 float t = 0;
 int led = 2000;
@@ -91,7 +92,8 @@ void setup() {
 
   Serial.println("Measuring voltage and current with INA219 ...");
 
-  last = millis();
+  last1 = millis();
+  last2 = millis();
   led_last = millis();
 }
 
@@ -107,6 +109,47 @@ void setup() {
 */
 
 void loop() {
+
+  /************
+  Monitoring Current
+  *************/
+  if (millis() - last1 >= 60000 ){
+    last1 = millis();
+    t = last1/1000.0; // Time in seconds
+
+
+    // MODIFY THIS TO OBTAIN Voc and Isc
+    // Change the voltage on the transistor BASE as needed using:
+
+    //HIGH = Short circut (Isc)
+    digitalWrite(base, HIGH);
+    delay(del);
+    current_mA = ina219.getCurrent_mA();
+    delay(del);
+
+    //LOW = Open circut (Voc)
+    digitalWrite(base, LOW);
+    delay(del);
+    voltage = ina219.getBusVoltage_V();
+    
+    // Max power (mW) is at roughly 0.7x the voltage
+    power_mW = (0.7*voltage)*current_mA;
+    
+    // Format: Time, Voltage, Current, Estimated Power
+    Serial.print(t); Serial.print(", "); 
+    Serial.print(voltage); Serial.print(", "); 
+    Serial.print(current_mA); Serial.print(", ");
+    Serial.println(power_mW);
+  }
+
+  // Blink the blue LED while we're acquiring data
+  if (millis() - led_last > led){
+    state = !state;
+    if (state){digitalWrite(2,HIGH);
+    }else{digitalWrite(2,LOW);
+    }
+    led_last = millis();
+  }
 
   /************
   Bluetooth
@@ -152,64 +195,25 @@ void loop() {
   
   // This is executed after we set the initial position
   if (incrementAngle != NULL && incrementTime != NULL && azimuthStepper.distanceToGo() == 0){ 
-    Serial.print("Starting sequence, will move motor by ");
-    Serial.print(incrementAngle);
-    Serial.print(" degrees in ");
-    Serial.print(incrementTime);
-    Serial.println(" minutes");
     long incrementTimeMS = incrementTime * 60000;
-    delay(incrementTimeMS);
-    Serial.println("Moving motor");
-    // Here we should check if the increment angle is within bounds 0 < x < 90 before incrementing
-    azimuthStepper.move(incrementAngle*5.69*2); //move relatively
-    azimuthStepper.setSpeed(100);
-    azimuthStepper.runSpeedToPosition();
+    if (millis() - last2 >= incrementTimeMS){
+      last2 = millis();
+      Serial.print("Starting sequence, will move motor by ");
+      Serial.print(incrementAngle);
+      Serial.print(" degrees in ");
+      Serial.print(incrementTime);
+      Serial.println(" minutes");
+      Serial.println("Moving motor");
+      // Here we should check if the increment angle is within bounds 0 < x < 90 before incrementing
+      azimuthStepper.move(incrementAngle*5.69*2); //move relatively
+      azimuthStepper.setSpeed(100);
+      azimuthStepper.runSpeedToPosition();
+    }
   }
-
-  // Set the speed and run the steppers (these should be called as often as possible)
+    // Set the speed and run the steppers (these should be called as often as possible)
   azimuthStepper.setSpeed(100);
   azimuthStepper.runSpeedToPosition();
   betaStepper.setSpeed(50);
   betaStepper.runSpeedToPosition();
 
-  /************
-  Monitoring Current
-  *************/
-  if (millis() - last >= 60000 ){
-    last = millis();
-    t = last/1000.0; // Time in seconds
-
-
-    // MODIFY THIS TO OBTAIN Voc and Isc
-    // Change the voltage on the transistor BASE as needed using:
-
-    //HIGH = Short circut (Isc)
-    digitalWrite(base, HIGH);
-    delay(del);
-    current_mA = ina219.getCurrent_mA();
-    delay(del);
-
-    //LOW = Open circut (Voc)
-    digitalWrite(base, LOW);
-    delay(del);
-    voltage = ina219.getBusVoltage_V();
-    
-    // Max power (mW) is at roughly 0.7x the voltage
-    power_mW = (0.7*voltage)*current_mA;
-    
-    // Format: Time, Voltage, Current, Estimated Power
-    Serial.print(t); Serial.print(", "); 
-    Serial.print(voltage); Serial.print(", "); 
-    Serial.print(current_mA); Serial.print(", ");
-    Serial.println(power_mW);
-  }
-
-  // Blink the blue LED while we're acquiring data
-  if (millis() - led_last > led){
-    state = !state;
-    if (state){digitalWrite(2,HIGH);
-    }else{digitalWrite(2,LOW);
-    }
-    led_last = millis();
-  }
 }
